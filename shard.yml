@@ -1,0 +1,14 @@
+name: sextant
+version: 0.1.0
+
+dependencies:
+  lmdb:
+    github: alisww/crystal-liblmdb
+
+authors:
+  - Allie Signet <allie@sibr.dev>
+
+description: |
+  A small helper for making reverse indexes with LMDB.
+
+license: AGPLv3
