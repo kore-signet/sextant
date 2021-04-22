@@ -77,19 +77,3 @@ class DupIterator
     end
   end
 end
-
-class MakeSets
-  include Iterator(Set(Bytes))
-
-  def initialize(@list : Iterator(Iterator(Bytes)))
-  end
-
-  def next
-    v = @list.next
-    if typeof(v) == Iterator::Stop
-      stop
-    else
-      v.to_set
-    end
-  end
-end

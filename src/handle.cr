@@ -106,6 +106,8 @@ class MultiHandle
     end
   end
 
+  # query methods
+
   def query(s : Tuple(Symbol, Array(Selector)))
     if s[0] == :or
       response_iters = [] of Iterator(Bytes)
@@ -132,6 +134,8 @@ class MultiHandle
     @handles[s[0]].get_bounded s[1], s[2]
   end
 
+  # Store methods
+
   def store(key : KeyType | Array(String | Int64 | Float64), val : Bytes, store_name = "store")
     @store_handles[store_name].put key, val
   end
@@ -140,6 +144,8 @@ class MultiHandle
     @store_handles[store_name].get key
   end
 
+  # Index Methods
+
   def put(idx : String, key : KeyType | Array(String | Int64 | Float64), val : Bytes)
     @handles[idx].put key, val
   end
@@ -147,6 +153,8 @@ class MultiHandle
   def get(idx : String, key : KeyType)
     @handles[idx].get key
   end
+
+  # Index Iters
 
   def get_iter(idx : String, key : KeyType)
     @handles[idx].get_iter key

@@ -4,7 +4,9 @@ version: 0.1.0
 dependencies:
   lmdb:
     github: alisww/crystal-liblmdb
-
+  cadmium_tokenizer:
+    github: cadmiumcr/tokenizer
+    
 authors:
   - Allie Signet <allie@sibr.dev>
 
