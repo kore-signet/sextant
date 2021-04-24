@@ -4,6 +4,10 @@ shards:
     git: https://github.com/cadmiumcr/tokenizer.git
     version: 0.1.0+git.commit.e7f8733e4d8ead9a811b6f41d0b5fa621ba03033
 
+  clim:
+    git: https://github.com/at-grandpa/clim.git
+    version: 0.17.1
+
   lmdb:
     git: https://github.com/alisww/crystal-liblmdb.git
     version: 0.0.2+git.commit.3b22df4465d7f3949892da1b144b94e3be90c991

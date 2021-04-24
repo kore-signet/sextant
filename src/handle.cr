@@ -115,14 +115,33 @@ class MultiHandle
         response_iters.push(query (selector))
       end
 
-      response_iters.flatten.uniq
+      response_iters.flatten
     else
-      response_iters = [] of Iterator(Bytes)
+      responses = [] of Array(Bytes)
       s[1].each do |selector|
-        response_iters.push(query (selector))
+        responses.push((query (selector)).to_a)
       end
 
-      response_iters.compact_map { |e| e.try &.to_set }.reduce { |first,second| first & second }
+      responses.reduce do |first,second|
+        i = 0
+        j = 0
+        first_len = first.size
+        second_len = second.size
+        common = Array(Bytes).new 
+        while i < first_len && j < second_len
+          cmp = first[i] <=> second[j]
+          if cmp == 0
+            common.push(first[i])
+            i += 1
+            j += 1
+          elsif cmp < 0
+            i += 1
+          else
+            j += 1
+          end
+        end
+        common
+      end
     end
   end
 

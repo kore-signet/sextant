@@ -4,9 +4,12 @@ version: 0.1.0
 dependencies:
   lmdb:
     github: alisww/crystal-liblmdb
+  clim:
+    github: at-grandpa/clim
+    version: 0.17.1
   cadmium_tokenizer:
     github: cadmiumcr/tokenizer
-    
+
 authors:
   - Allie Signet <allie@sibr.dev>
 
@@ -14,3 +17,7 @@ description: |
   A small helper for making reverse indexes with LMDB.
 
 license: AGPLv3
+
+targets:
+  sextant:
+    main: src/bin/sextant.cr
