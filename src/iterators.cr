@@ -1,6 +1,12 @@
 require "lmdb"
 require "./utils.cr"
 
+class BytesIter
+  include Iterator(Bytes)
+  def next
+  end
+end
+
 class NextTupleIterator
   include Iterator(Tuple(Lmdb::ValTypes,Lmdb::ValTypes))
   def initialize(@cur : Lmdb::Cursor)
@@ -16,8 +22,7 @@ class NextTupleIterator
   end
 end
 
-class BoundedIterator
-  include Iterator(Bytes)
+class BoundedIterator < BytesIter
   def initialize(@cur : Lmdb::Cursor, @min : Bytes, @max : Bytes)
   end
 
@@ -32,8 +37,7 @@ class BoundedIterator
   end
 end
 
-class ValueNextIterator
-  include Iterator(Bytes)
+class ValueNextIterator < BytesIter
   def initialize(@cur : Lmdb::Cursor)
   end
 
@@ -47,8 +51,7 @@ class ValueNextIterator
   end
 end
 
-class PrevIterator
-  include Iterator(Bytes)
+class PrevIterator < BytesIter
   def initialize(@cur : Lmdb::Cursor)
   end
 
@@ -62,9 +65,7 @@ class PrevIterator
   end
 end
 
-class DupIterator
-  include Iterator(Bytes)
-
+class DupIterator < BytesIter
   def initialize(@cur : Lmdb::Cursor)
   end
 
@@ -76,4 +77,109 @@ class DupIterator
       v[2].as(Bytes)
     end
   end
+end
+
+# yes, this is just iter.flatten
+class ByteArrayIter
+  include Iterator(Array(Bytes))
+  def next
+  end
+end
+
+class IntersectIterator < ByteArrayIter
+  property iters_amount : Int32
+  property left : Hash(Bytes, Int32)
+  property iters : Array(BytesIter)
+
+  def initialize(iters)
+    @iters = Array(BytesIter).new.concat(iters)
+    @iters_amount = @iters.size
+    @left = Hash(Bytes,Int32).new
+  end
+
+  def next
+    a = Array(Bytes).new
+
+    if @iters.empty?
+      return stop
+    end
+
+    @iters.each do |list|
+      val = list.next
+      if val != nil && val.class != Iterator::Stop
+        x = val.as(Bytes)
+        c = @left[x]?
+        if c != nil
+          c = c.as(Int32) + 1
+          if c == @iters_amount
+            @left.delete x
+            a.push x
+          else
+            @left[x] = c
+          end
+        else
+           @left[x] = 1
+        end
+      else
+        @iters.delete list
+      end
+    end
+
+    a
+  end
+end
+
+class UnionIterator < ByteArrayIter
+  include Iterator(Array(Bytes))
+  property iters : Array(BytesIter)
+
+  def initialize(iters)
+    @iters = Array(BytesIter).new.concat(iters)
+  end
+
+  def next
+    a = Array(Bytes).new
+
+    if @iters.empty?
+      return stop
+    end
+
+    @iters.each do |list|
+      val = list.next
+      if val != nil && val.class != Iterator::Stop
+        a.push val.as(Bytes)
+      else
+        @iters.delete list
+      end
+    end
+
+    a
+  end
+end
+
+class WrapperIterator < BytesIter
+  property buffer : Array(Bytes)
+  property generator : ByteArrayIter
+
+  def initialize(@generator : ByteArrayIter)
+    @buffer = [] of Bytes
+  end
+
+  def next
+    if !@buffer.empty?
+      @buffer.pop
+    else
+      while true
+        val = @generator.next
+        if val.class == Iterator::Stop
+          break
+        elsif !val.as(Array(Bytes)).empty?
+          @buffer = val.as(Array(Bytes))
+          return @buffer.pop
+        end
+      end
+      stop
+    end
+  end
+
 end

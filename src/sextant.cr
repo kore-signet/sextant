@@ -91,3 +91,18 @@ module Sextant
     end
   end
 end
+require "benchmark"
+include Query
+
+
+# e = Sextant::Engine.new "./testidx", "./testdb"
+# e.with_handle ["playerTags","teamTags","description"] do |cur|
+#   puts (Benchmark.realtime do
+#     cur.query(
+#       union(
+#         where("description").equals("ball"),
+#         where("teamTags").equals("d9f89a8a-c563-493e-9d64-78e4f9a55d4a")
+#       )
+#     ).in_groups_of(100).next
+#   end).total_milliseconds
+# end

@@ -50,11 +50,8 @@ class BaseHandle < Handle
   end
 
   def get_dups(key : String | Bytes)
-    first = (get key)[2]
-    if first == nil
-      return ([] of Bytes).each
-    end
-    [first.as(Bytes)].each.chain(DupIterator.new(@cursor))
+    first = get key
+    DupIterator.new(@cursor)
   end
 
   def get_iter(key : Float64 | Int64)
@@ -108,40 +105,17 @@ class MultiHandle
 
   # query methods
 
-  def query(s : Tuple(Symbol, Array(Selector)))
+  def query(s : Tuple(Symbol,Array(Selector)))
     if s[0] == :or
-      response_iters = [] of Iterator(Bytes)
-      s[1].each do |selector|
-        response_iters.push(query (selector))
-      end
-
-      response_iters.flatten
+      iters = s[1].map { |e| query(e) }
+      WrapperIterator.new (
+        UnionIterator.new iters
+      )
     else
-      responses = [] of Array(Bytes)
-      s[1].each do |selector|
-        responses.push((query (selector)).to_a)
-      end
-
-      responses.reduce do |first,second|
-        i = 0
-        j = 0
-        first_len = first.size
-        second_len = second.size
-        common = Array(Bytes).new 
-        while i < first_len && j < second_len
-          cmp = first[i] <=> second[j]
-          if cmp == 0
-            common.push(first[i])
-            i += 1
-            j += 1
-          elsif cmp < 0
-            i += 1
-          else
-            j += 1
-          end
-        end
-        common
-      end
+      iters = s[1].map { |e| query(e) }
+      WrapperIterator.new (
+        IntersectIterator.new iters
+      )
     end
   end
 

@@ -3,7 +3,7 @@ version: 0.1.0
 
 dependencies:
   lmdb:
-    github: alisww/crystal-liblmdb
+    path: /home/alisw/programming/crystal-liblmdb
   clim:
     github: at-grandpa/clim
     version: 0.17.1

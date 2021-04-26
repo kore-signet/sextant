@@ -9,6 +9,6 @@ shards:
     version: 0.17.1
 
   lmdb:
-    git: https://github.com/alisww/crystal-liblmdb.git
+    path: /home/alisw/programming/crystal-liblmdb
     version: 0.0.2+git.commit.3b22df4465d7f3949892da1b144b94e3be90c991
 
