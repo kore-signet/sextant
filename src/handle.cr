@@ -51,7 +51,12 @@ class BaseHandle < Handle
 
   def get_dups(key : String | Bytes)
     first = get key
-    DupIterator.new(@cursor)
+    ChainedIter.new(
+      WrapperArrayIter.new(
+        [(first[2]).as(Bytes)]
+      ),
+      DupIterator.new(@cursor)
+    )
   end
 
   def get_iter(key : Float64 | Int64)
@@ -85,7 +90,14 @@ class BaseHandle < Handle
     min = min.to_bytes
     max = max.to_bytes
     first = @cursor.find_ge(min)
-    [first[2].as(Bytes)].each.chain(BoundedIterator.new(@cursor,min,max))
+    ChainedIter.new(
+      WrapperArrayIter.new([first[2].as(Bytes)]),
+      BoundedIterator.new(@cursor,min,max)
+    )
+  end
+
+  def get_subset_iter(s : String)
+    SubsetIterator.new @cursor, s
   end
 end
 
@@ -113,7 +125,7 @@ class MultiHandle
     end
   end
 
-  def with_handle(idx : String)
+  def with_handle(idx : String, return_cur = false)
     possible_handles = @handles[idx]?
     if possible_handles == nil
       @handles[idx] = [] of BaseHandle
@@ -123,10 +135,16 @@ class MultiHandle
     if !possible_handles.as(Array(BaseHandle)).empty?
       handle = @handles[idx].pop
       yield handle
+      if return_cur
+        @handles[idx].push handle
+      end
     else
       cur = @idx_txn.open_cursor @databases[idx]
       handle = BaseHandle.new cur, @idx_txn
       yield handle
+      if return_cur
+        @handles[idx].push handle
+      end
     end
   end
   # query methods
@@ -150,7 +168,7 @@ class MultiHandle
     with_handle s[0] do |handle|
       v = handle.get_dups s[1]
     end
-    v.as(DupIterator)
+    v.as(ChainedIter)
   end
 
   def query(s : Tuple(String, Int64 | Float64, Int64 | Float64))
@@ -158,9 +176,18 @@ class MultiHandle
     with_handle s[0] do |handle|
       v = handle.get_bounded s[1], s[2]
     end
-    v.as(BoundedIterator)
+    v.as(ChainedIter)
   end
 
+  def query(s : Tuple(Symbol, Key, Key))
+    v = nil
+    if s[0] == :includes
+      with_handle s[1] do |handle|
+        v = handle.get_subset_iter s[2]
+      end
+    end
+    v.as(SubsetIterator)
+  end
   # Store methods
 
   def store(key : KeyType | Array(String | Int64 | Float64), val : Bytes, store_name = "store")
@@ -174,11 +201,15 @@ class MultiHandle
   # Index Methods
 
   def put(idx : String, key : KeyType | Array(String | Int64 | Float64), val : Bytes)
-    @handles[idx].put key, val
+    with_handle idx, return_cur: true do |cur|
+      cur.put key, val
+    end
   end
 
   def get(idx : String, key : KeyType)
-    @handles[idx].get key
+    with_handle idx, return_cur: true do |cur|
+      cur.get key
+    end
   end
 
   # Index Iters

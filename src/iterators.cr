@@ -1,12 +1,6 @@
 require "lmdb"
 require "./utils.cr"
 
-class BytesIter
-  include Iterator(Bytes)
-  def next
-  end
-end
-
 class NextTupleIterator
   include Iterator(Tuple(Lmdb::ValTypes,Lmdb::ValTypes))
   def initialize(@cur : Lmdb::Cursor)
@@ -18,6 +12,61 @@ class NextTupleIterator
       stop
     else
       { v[1],v[2] }
+    end
+  end
+end
+
+class NoDupTupleIterator
+  include Iterator(Tuple(Lmdb::ValTypes,Lmdb::ValTypes))
+  def initialize(@cur : Lmdb::Cursor)
+  end
+
+  def next
+    v = @cur.next_no_dup
+    if v[2] == nil
+      stop
+    else
+      { v[1],v[2] }
+    end
+  end
+end
+
+class BytesIter
+  include Iterator(Bytes)
+
+  def initialize()
+  end
+
+  def next
+    stop
+  end
+end
+
+class SubsetIterator < BytesIter
+  property current_iter : BytesIter
+  property cur : Lmdb::Cursor
+  property bytes : String
+
+  def initialize(@cur : Lmdb::Cursor, @bytes : String)
+    @current_iter = BytesIter.new
+    @cur.first
+  end
+
+  def next
+    v = @current_iter.next
+    if v.class == Iterator::Stop
+      while true
+        next_keyval = @cur.next_no_dup
+        if next_keyval[2] == nil
+          break
+        elsif next_keyval[1].as(String).includes? @bytes
+          @current_iter = DupIterator.new @cur
+          return next_keyval[2].as(Bytes)
+        end
+      end
+      stop
+    else
+      v
     end
   end
 end
@@ -83,7 +132,46 @@ class DupIterator < BytesIter
   end
 end
 
-# yes, this is just iter.flatten
+class ChainedIter < BytesIter
+  property iters : Array(BytesIter)
+  property cur : BytesIter
+
+  def initialize(*iters)
+    @iters = Array(BytesIter).new.concat(iters.to_a)
+    @cur = @iters.pop
+  end
+
+  def next
+    v = @cur.next
+    if v.class == Iterator::Stop
+      next_iter = @iters.pop?
+      if next_iter != nil
+        @cur = next_iter.as(BytesIter)
+        @cur.next
+      else
+        stop
+      end
+    else
+      v
+    end
+  end
+end
+
+class WrapperArrayIter < BytesIter
+  property buffer : Array(Bytes)
+  def initialize(@buffer)
+  end
+
+  def next
+    v = @buffer.pop?
+    if v != nil
+      v
+    else
+      stop
+    end
+  end
+end
+
 class ByteArrayIter
   include Iterator(Array(Bytes))
   def next
@@ -161,6 +249,7 @@ class UnionIterator < ByteArrayIter
   end
 end
 
+# yes, this is just basically iter.flatten
 class WrapperIterator < BytesIter
   property buffer : Array(Bytes)
   property generator : ByteArrayIter

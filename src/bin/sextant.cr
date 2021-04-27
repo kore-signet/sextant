@@ -5,6 +5,8 @@ require "cadmium_tokenizer"
 require "clim"
 require "colorize"
 
+include Processing
+
 module SextantHelper
   class Cli < Clim
     CL    = STDOUT.tty? ? "\u001b[0G" : "\u000d \u000d"
@@ -85,6 +87,7 @@ module SextantHelper
                     if tokenize_fields.index(k) != nil
                       s = v.as_s # this field should be tokenized! so let's make it a string, check it's not empty, tokenize it, and insert each value.
                       if !s.empty?
+                        cur.put k, s, id
                         tokenizer.tokenize(s).each do |to_insert|
                           cur.put k, to_insert, id
                         end

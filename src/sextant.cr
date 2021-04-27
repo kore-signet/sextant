@@ -63,7 +63,7 @@ module Sextant
 
       store_names.each do |store_name|
         if !@store_dbs.has_key?(store_name)
-          @store_dbs[store_name] = @store.open_database store_name, Lmdb::Flags::Database.flags(CREATE, DUP_SORT, DUP_FIXED)
+          @store_dbs[store_name] = @store.open_database store_name, Lmdb::Flags::Database.flags(CREATE)
         end
       end
 
@@ -91,14 +91,18 @@ module Sextant
 end
 
 require "benchmark"
-include Query
-# 
+# include Query
+# #
 # e = Sextant::Engine.new "./testidx", "./testdb"
-# e.with_handle ["playerTags","teamTags","description"] do |cur|
-#   puts cur.query(
-#     intersection(
-#       where("description").equals("ball"),
-#       where("description").equals("play")
-#     )
-#   ).in_groups_of(100).next
+# e.with_handle ["playerTags","teamTags","description", "day"] do |cur|
+#   Benchmark.ips do |job|
+#     job.report ("owo") {
+#       cur.query(
+#         intersection(
+#           where("description").equals("ball"),
+#           where("day").in_between(10_i64, 60_i64)
+#         )
+#       ).in_groups_of(100).next
+#     }
+#   end
 # end
