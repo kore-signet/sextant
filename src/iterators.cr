@@ -30,6 +30,7 @@ class BoundedIterator < BytesIter
     v = @cur.next
     key = v[1].to_s.to_slice
     if v[2] == nil || (key <=> @max) >= 0 || (key <=> @min) <= 0
+      @cur.close
       stop
     else
       v[2].as(Bytes)
@@ -44,6 +45,7 @@ class ValueNextIterator < BytesIter
   def next
     v = @cur.next
     if v[2] == nil
+      @cur.close
       stop
     else
       v[2].as(Bytes)
@@ -58,6 +60,7 @@ class PrevIterator < BytesIter
   def next
     v = @cur.prev
     if v[2] == nil
+      @cur.close
       stop
     else
       v[2].as(Bytes)
@@ -72,6 +75,7 @@ class DupIterator < BytesIter
   def next
     v = @cur.next_dup
     if v[2] == nil
+      @cur.close
       stop
     else
       v[2].as(Bytes)

@@ -50,7 +50,7 @@ module Sextant
     end
 
     def with_handle(index_names : Array(String), store_names = ["store","config"], read_only = true)
-      handles = Hash(String,BaseHandle).new
+      handles = Hash(String,Array(BaseHandle)).new
       store_handles = Hash(String,BaseHandle).new
 
       curs = [] of Lmdb::Cursor
@@ -72,8 +72,7 @@ module Sextant
 
       index_names.each do |handle_name|
         idx_cur = txn.open_cursor(@dbs[handle_name])
-        curs.push idx_cur
-        handles[handle_name] = BaseHandle.new(idx_cur, txn)
+        handles[handle_name] = [BaseHandle.new(idx_cur, txn)]
       end
 
       store_names.each do |store_name|
@@ -82,27 +81,24 @@ module Sextant
         store_handles[store_name] = BaseHandle.new(store_cur,store_txn)
       end
 
-      yield MultiHandle.new handles, store_handles
-
-      curs.each &.close
+      multihandle = MultiHandle.new handles, store_handles, txn,  @dbs
+      yield multihandle
 
       txn.commit
       store_txn.commit
     end
   end
 end
+
 require "benchmark"
 include Query
-
-
+# 
 # e = Sextant::Engine.new "./testidx", "./testdb"
 # e.with_handle ["playerTags","teamTags","description"] do |cur|
-#   puts (Benchmark.realtime do
-#     cur.query(
-#       union(
-#         where("description").equals("ball"),
-#         where("teamTags").equals("d9f89a8a-c563-493e-9d64-78e4f9a55d4a")
-#       )
-#     ).in_groups_of(100).next
-#   end).total_milliseconds
+#   puts cur.query(
+#     intersection(
+#       where("description").equals("ball"),
+#       where("description").equals("play")
+#     )
+#   ).in_groups_of(100).next
 # end

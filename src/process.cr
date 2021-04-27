@@ -49,27 +49,6 @@ module Processing
     res
   end
 
-      #   responses.reduce do |first,second|
-      #     i = 0
-      #     j = 0
-      #     first_len = first.size
-      #     second_len = second.size
-      #     common = Array(Bytes).new
-      #     while i < first_len && j < second_len
-      #       cmp = first[i] <=> second[j]
-      #       if cmp == 0
-      #         common.push(first[i])
-      #         i += 1
-      #         j += 1
-      #       elsif cmp < 0
-      #         i += 1
-      #       else
-      #         j += 1
-      #       end
-      #     end
-      #     common
-      #   end
-      # end
   def process_as_string(i : Hash(String,JSON::Any)) : Array(Bytes)
     process i
   end

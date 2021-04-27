@@ -91,10 +91,20 @@ end
 
 class MultiHandle
   alias KeyType = String | Bytes | Int64 | Float64
-  property handles : Hash(String,BaseHandle)
+  property idx_txn : Lmdb::Transaction
+  property databases : Hash(String,Lmdb::Database)
+  property handles : Hash(String,Array(BaseHandle))
   property store_handles : Hash(String,BaseHandle)
 
-  def initialize(@handles,@store_handles)
+  def initialize(@handles,@store_handles,@idx_txn,@databases)
+  end
+
+  def close_cursors
+    @handles.each_value do |v|
+      v.each do |handle|
+        handle.cursor.close
+      end
+    end
   end
 
   def close
@@ -103,6 +113,22 @@ class MultiHandle
     end
   end
 
+  def with_handle(idx : String)
+    possible_handles = @handles[idx]?
+    if possible_handles == nil
+      @handles[idx] = [] of BaseHandle
+      possible_handles = @handles[idx]
+    end
+
+    if !possible_handles.as(Array(BaseHandle)).empty?
+      handle = @handles[idx].pop
+      yield handle
+    else
+      cur = @idx_txn.open_cursor @databases[idx]
+      handle = BaseHandle.new cur, @idx_txn
+      yield handle
+    end
+  end
   # query methods
 
   def query(s : Tuple(Symbol,Array(Selector)))
@@ -120,11 +146,19 @@ class MultiHandle
   end
 
   def query(s : Tuple(String, KeyType))
-    @handles[s[0]].get_dups s[1]
+    v = nil
+    with_handle s[0] do |handle|
+      v = handle.get_dups s[1]
+    end
+    v.as(DupIterator)
   end
 
   def query(s : Tuple(String, Int64 | Float64, Int64 | Float64))
-    @handles[s[0]].get_bounded s[1], s[2]
+    v = nil
+    with_handle s[0] do |handle|
+      v = handle.get_bounded s[1], s[2]
+    end
+    v.as(BoundedIterator)
   end
 
   # Store methods
