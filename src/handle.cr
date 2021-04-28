@@ -78,8 +78,28 @@ class BaseHandle < Handle
 
   def get_iter_ge(key : String | Bytes)
     first = @cursor.find_ge(key)
-    [first[2].as(Bytes)].each.chain(ValueNextIterator.new(@cursor))
+    ChainedIter.new(
+      WrapperArrayIter.new(
+        [(first[2]).as(Bytes)]
+      ),
+      ValueNextIterator.new(@cursor)
+   )
   end
+
+  def get_iter_le(key : Float64 | Int64)
+    get_iter_le key.to_bytes
+  end
+
+  def get_iter_le(key : String | Bytes)
+    first = @cursor.find_ge(key)
+    ChainedIter.new(
+      WrapperArrayIter.new(
+        [(first[2]).as(Bytes)]
+      ),
+      PrevIterator.new(@cursor)
+   )
+  end
+
 
   def get_bounded(key : Float64 | Int64)
     get_bounded key.to_bytes
@@ -106,9 +126,13 @@ class MultiHandle
   property idx_txn : Lmdb::Transaction
   property databases : Hash(String,Lmdb::Database)
   property handles : Hash(String,Array(BaseHandle))
-  property store_handles : Hash(String,BaseHandle)
 
-  def initialize(@handles,@store_handles,@idx_txn,@databases)
+
+  property store_handles : Hash(String,Array(BaseHandle))
+  property store_databases : Hash(String,Lmdb::Database)
+  property store_txn : Lmdb::Transaction
+
+  def initialize(@handles, @idx_txn, @databases, @store_handles, @store_txn, @store_databases)
   end
 
   def close_cursors
@@ -147,55 +171,105 @@ class MultiHandle
       end
     end
   end
+
+
+  def with_store_handle(idx : String, return_cur = false)
+    possible_handles = @store_handles[idx]?
+    if possible_handles == nil
+      @store_handles[idx] = [] of BaseHandle
+      possible_handles = @store_handles[idx]
+    end
+
+    if !possible_handles.as(Array(BaseHandle)).empty?
+      handle = @store_handles[idx].pop
+      yield handle
+      if return_cur
+        @store_handles[idx].push handle
+      end
+    else
+      cur = @store_txn.open_cursor @store_databases[idx]
+      handle = BaseHandle.new cur, @store_txn
+      yield handle
+      if return_cur
+        @store_handles[idx].push handle
+      end
+    end
+  end
   # query methods
 
-  def query(s : Tuple(Symbol,Array(Selector)))
-    if s[0] == :or
-      iters = s[1].map { |e| query(e) }
+  def query(s : ContainedMultiple)
+    if s.kind == :or
+      iters = s.selectors.map { |e| query(e) }
       WrapperIterator.new (
         UnionIterator.new iters
       )
     else
-      iters = s[1].map { |e| query(e) }
+      iters = s.selectors.map { |e| query(e) }
       WrapperIterator.new (
         IntersectIterator.new iters
       )
     end
   end
 
-  def query(s : Tuple(String, KeyType))
+  def fetch_query(i : BytesIter, store_name = "store")
     v = nil
-    with_handle s[0] do |handle|
-      v = handle.get_dups s[1]
+    with_store_handle store_name do |cur|
+      v = FetchIterator.new i, cur.cursor
+    end
+    v.as(FetchIterator)
+  end
+
+  def query(s : ContainedEquality)
+    v = nil
+    with_handle s.key do |handle|
+      v = handle.get_dups s.val
     end
     v.as(ChainedIter)
   end
 
-  def query(s : Tuple(String, Int64 | Float64, Int64 | Float64))
+  def query(s : ContainedRange)
     v = nil
-    with_handle s[0] do |handle|
-      v = handle.get_bounded s[1], s[2]
+    with_handle s.key do |handle|
+      v = handle.get_bounded s.lower, s.upper
     end
     v.as(ChainedIter)
   end
 
-  def query(s : Tuple(Symbol, Key, Key))
+  def query(s : ContainedStringOp)
     v = nil
-    if s[0] == :includes
-      with_handle s[1] do |handle|
-        v = handle.get_subset_iter s[2]
+    if s.kind == :includes
+      with_handle s.key do |handle|
+        v = handle.get_subset_iter s.val.as(String)
       end
     end
     v.as(SubsetIterator)
   end
+
+  def query(s : ContainedIntOp)
+    v = nil
+    if s.kind == :lesser
+      with_handle s.key do |handle|
+        v = handle.get_iter_le s.val.to_bytes
+      end
+    elsif s.kind == :greater
+      with_handle s.key do |handle|
+        v = handle.get_iter_ge s.val.to_bytes
+      end
+    end
+    v.as(ChainedIter)
+  end
   # Store methods
 
   def store(key : KeyType | Array(String | Int64 | Float64), val : Bytes, store_name = "store")
-    @store_handles[store_name].put key, val
+    with_store_handle store_name, return_cur: true do |cur|
+      cur.put key, val
+    end
   end
 
   def fetch(key : KeyType, store_name = "store")
-    @store_handles[store_name].get key
+    with_store_handle store_name, return_cur: true do |cur|
+      cur.get key
+    end
   end
 
   # Index Methods
@@ -212,21 +286,21 @@ class MultiHandle
     end
   end
 
-  # Index Iters
-
-  def get_iter(idx : String, key : KeyType)
-    @handles[idx].get_iter key
-  end
-
-  def get_iter_ge(idx : String, key : KeyType)
-    @handles[idx].get_iter_ge key
-  end
-
-  def get_dups(idx : String, key : KeyType)
-    @handles[idx].get_dups key
-  end
-
-  def get_bounded(idx : String, min : Int64 | Float64, max : Int64 | Float64)
-    @handles[idx].get_bounded min, max
-  end
+  # # Index Iters
+  #
+  # def get_iter(idx : String, key : KeyType)
+  #   @handles[idx].get_iter key
+  # end
+  #
+  # def get_iter_ge(idx : String, key : KeyType)
+  #   @handles[idx].get_iter_ge key
+  # end
+  #
+  # def get_dups(idx : String, key : KeyType)
+  #   @handles[idx].get_dups key
+  # end
+  #
+  # def get_bounded(idx : String, min : Int64 | Float64, max : Int64 | Float64)
+  #   @handles[idx].get_bounded min, max
+  # end
 end

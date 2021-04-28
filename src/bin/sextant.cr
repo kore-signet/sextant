@@ -58,6 +58,10 @@ module SextantHelper
               to_tokenize = gets
               tokenize_fields = to_tokenize.to_s.split(",", remove_empty: true)
               tokenizer = Cadmium::Tokenizer::Pragmatic.new
+              puts "Are any of these fields date fields?"
+              print "> "
+              date_fields = gets
+              date_fields = date_fields.to_s.split(",", remove_empty: true)
 
               print "-> ".colorize(:green), "indexing documents", "\n"
 
@@ -87,10 +91,19 @@ module SextantHelper
                     if tokenize_fields.index(k) != nil
                       s = v.as_s # this field should be tokenized! so let's make it a string, check it's not empty, tokenize it, and insert each value.
                       if !s.empty?
-                        cur.put k, s, id
+                        cur.put k, s.downcase, id
                         tokenizer.tokenize(s).each do |to_insert|
                           cur.put k, to_insert, id
                         end
+                      end
+                    elsif date_fields.index(k) != nil
+                      begin
+                        to_insert = (Time::Format::ISO_8601_DATE_TIME.parse v.as_s).to_unix.to_bytes
+                        cur.put k, to_insert, id
+                      rescue ex
+                        puts ex.message
+                        puts k
+                        puts to_insert
                       end
                     elsif fields.index(k) != nil
                       process(v.raw).each do |to_insert|

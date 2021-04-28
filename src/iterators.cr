@@ -274,5 +274,28 @@ class WrapperIterator < BytesIter
       stop
     end
   end
+end
 
+
+class FetchIterator
+  include Iterator(Bytes)
+  property generator : BytesIter
+  property store_cur : Lmdb::Cursor
+
+  def initialize(@generator, @store_cur)
+  end
+
+  def next
+    v = @generator.next
+    if v == Iterator::Stop
+      stop
+    else
+      blob = @store_cur.find v.as(Bytes)
+      if blob[2] == nil
+        stop
+      else
+        blob[2].as(Bytes)
+      end
+    end
+  end
 end

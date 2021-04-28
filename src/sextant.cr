@@ -49,9 +49,9 @@ module Sextant
       idx_txn.commit
     end
 
-    def with_handle(index_names : Array(String), store_names = ["store","config"], read_only = true)
+    def with_handle(index_names : Array(String), store_names = ["store","config"], read_only = true, auto_close = true)
       handles = Hash(String,Array(BaseHandle)).new
-      store_handles = Hash(String,BaseHandle).new
+      store_handles = Hash(String,Array(BaseHandle)).new
 
       curs = [] of Lmdb::Cursor
 
@@ -77,32 +77,73 @@ module Sextant
 
       store_names.each do |store_name|
         store_cur = store_txn.open_cursor(@store_dbs[store_name])
-        curs.push store_cur
-        store_handles[store_name] = BaseHandle.new(store_cur,store_txn)
+        store_handles[store_name] = [BaseHandle.new(store_cur,store_txn)]
       end
 
-      multihandle = MultiHandle.new handles, store_handles, txn,  @dbs
+      multihandle = MultiHandle.new handles, txn,  @dbs, store_handles, store_txn, @store_dbs
       yield multihandle
-
-      txn.commit
-      store_txn.commit
+#
+      if auto_close
+        txn.commit
+        store_txn.commit
+      end
     end
   end
 end
-
-require "benchmark"
+#
+# require "benchmark"
 # include Query
-# #
+# # # #
 # e = Sextant::Engine.new "./testidx", "./testdb"
-# e.with_handle ["playerTags","teamTags","description", "day"] do |cur|
-#   Benchmark.ips do |job|
-#     job.report ("owo") {
-#       cur.query(
-#         intersection(
-#           where("description").equals("ball"),
-#           where("day").in_between(10_i64, 60_i64)
-#         )
-#       ).in_groups_of(100).next
-#     }
+# e.with_handle ["playerTags","teamTags","description", "day", "metadata", "created"] do |cur|
+#   puts cur.fetch_query(
+#     cur.query(
+#       intersection(
+#         where("created").lesser(1616880577_i64),
+#         where("description").equals("ball")
+#       )
+#     )
+#   ).select(Bytes).map { |e| String.new e.as(Bytes) }.next
+    # Benchmark.ips do |job|
+    #   job.report("FETCH 50 EVENTS WHERE INTERSECTION()") {
+    #    cur.fetch_query(
+    #     cur.query(
+    #       intersection(
+    #         where("created").lesser(1616880577_i64),
+    #         where("description").equals("ball")
+    #       )
+    #     )
+    #   ).select(Bytes).map { |e| String.new e }.in_groups_of(50).next
+    # }
+  # end
+  # Benchmark.ips do |job|
+  #    job.report("<= 20") {
+  #    cur.query(
+  #       intersection(
+  #         where("created").lesser(1616880577_i64),
+  #         where("description").equals("ball")
+  #       )).in_groups_of(100).next
+  #     }
+  #   }
+    # job.report ("== ball (tokenization)") {
+    #   cur.query(
+    #       where("description").equals("ball")
+    #   ).in_groups_of(100).next
+    # }
+    # job.report ("day > 10 and day < 60") {
+    #   cur.query(
+    #       where("day").in_between(10_i64,60_i64)
+    #   ).in_groups_of(100).next
+    # }
+    # job.report ("fuzzy matching 'play ball'") {
+    #   cur.query(
+    #       where("description").includes("play ball")
+    #   ).in_groups_of(100).next
+    # }
+    # job.report ("all messages from the hall monitor") {
+    #   cur.query(
+    #       where("metadata").equals("being_1")
+    #   ).in_groups_of(100).next
+    # }
 #   end
 # end
