@@ -78,7 +78,7 @@ class BoundedIterator < BytesIter
   def next
     v = @cur.next
     key = v[1].to_s.to_slice
-    if v[2] == nil || (key <=> @max) >= 0 || (key <=> @min) <= 0
+    if v[2] == nil || (key <=> @max) > 0 || (key <=> @min) < 0
       @cur.close
       stop
     else
@@ -287,7 +287,7 @@ class FetchIterator
 
   def next
     v = @generator.next
-    if v == Iterator::Stop
+    if v.class == Iterator::Stop
       stop
     else
       blob = @store_cur.find v.as(Bytes)

@@ -3,12 +3,14 @@ version: 0.1.0
 
 dependencies:
   lmdb:
-    path: /home/alisw/programming/crystal-liblmdb
+    github: alisww/crystal-liblmdb
   clim:
     github: at-grandpa/clim
     version: 0.17.1
   cadmium_tokenizer:
     github: cadmiumcr/tokenizer
+  cbor:
+    git: https://git.sr.ht/~arestifo/crystal-cbor
 
 authors:
   - Allie Signet <allie@sibr.dev>

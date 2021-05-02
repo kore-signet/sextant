@@ -20,6 +20,17 @@ module Utils
     buf.rewind
     buf.read_bytes Float64, IO::ByteFormat::BigEndian
   end
+
+  def generate_id (time = Time.utc.to_unix_f.to_bytes)
+    buf_s = Bytes.new(16)
+    buf = IO::Memory.new buf_s
+
+    buf.write time
+    buf.write Random::Secure.random_bytes(n: 8)
+
+    buf_s
+  end
+
 end
 
 struct Int64
@@ -54,5 +65,14 @@ struct Float64
     buf.rewind
     buf.write_bytes (i ^ Int64::MIN), IO::ByteFormat::BigEndian
     buf_s
-  end    
+  end
+end
+
+struct UInt64
+  def to_bytes
+    buf_s = Bytes.new(8)
+    buf = IO::Memory.new buf_s
+    buf.write_bytes self
+    buf_s
+  end
 end

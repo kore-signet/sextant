@@ -1,7 +1,7 @@
 module Query
   alias Key = String
   alias SelectRange = Tuple(Key, Int64 | Float64, Int64 | Float64)
-  alias SelectEquality = Tuple(Key, Key)
+  alias SelectEquality = Tuple(Key, Key | Int64 | Float64 | Bytes)
   alias SelectOp = Tuple(Symbol, Key, Key)
   alias SelectIntOp = Tuple(Symbol, Key, Float64 | Int64)
   alias Selector = SelectRange | SelectEquality | SelectOp | SelectIntOp | Tuple(Symbol, Array(Selector))
@@ -27,7 +27,11 @@ module Query
       ContainedRange.new(@key, min, max)
     end
 
-    def equals(val : Key)
+    def equals(val : Int64 | Float64)
+      ContainedEquality.new(@key,val.to_bytes)
+    end
+
+    def equals(val : Key | Bytes)
       ContainedEquality.new(@key, val)
     end
 
@@ -76,7 +80,7 @@ module Query
 
   class ContainedEquality < SelectorContainer
     property key : Key
-    property val : Key
+    property val : Key | Bytes
 
     def initialize(@key,@val)
     end

@@ -23,15 +23,15 @@ class BaseHandle < Handle
     @txn.commit
   end
 
-  def put(key : Float64 | Int64, id : Bytes)
+  def put(key : Float64 | Int64, id : Bytes | String)
     @cursor.put key.to_bytes, id
   end
 
-  def put(key : String | Bytes, id : Bytes)
+  def put(key : String | Bytes, id : Bytes | String)
     @cursor.put key, id
   end
 
-  def put(key_array : Array(String | Int64 | Float64), id : Bytes)
+  def put(key_array : Array(String | Int64 | Float64), id : Bytes | String)
     key_array.each do |key|
       put key, id
     end
@@ -51,12 +51,16 @@ class BaseHandle < Handle
 
   def get_dups(key : String | Bytes)
     first = get key
-    ChainedIter.new(
-      WrapperArrayIter.new(
-        [(first[2]).as(Bytes)]
-      ),
-      DupIterator.new(@cursor)
-    )
+    if first[2] == nil
+      ChainedIter.new(WrapperArrayIter.new([] of Bytes))
+    else
+      ChainedIter.new(
+        WrapperArrayIter.new(
+          [(first[2]).as(Bytes)]
+        ),
+        DupIterator.new(@cursor)
+      )
+    end
   end
 
   def get_iter(key : Float64 | Int64)
@@ -64,12 +68,22 @@ class BaseHandle < Handle
   end
 
   def get_iter(key : String | Bytes)
-    first = (get key)[2]
-    if first == nil
-      return ([] of Bytes).each
-    end
+    first = get key
+    if first[2] == nil
+      ChainedIter.new(WrapperArrayIter.new([] of Bytes))
+    else
+      ChainedIter.new(
+        WrapperArrayIter.new(
+          [(first[2]).as(Bytes)]
+        ),
+        ValueNextIterator.new(@cursor)
+     )
+   end
+  end
 
-    [first.as(Bytes)].each.chain(ValueNextIterator.new(@cursor))
+  def get_iter_no_dups
+    @cursor.first
+    NoDupTupleIterator.new(@cursor)
   end
 
   def get_iter_ge(key : Float64 | Int64)
@@ -77,13 +91,17 @@ class BaseHandle < Handle
   end
 
   def get_iter_ge(key : String | Bytes)
-    first = @cursor.find_ge(key)
-    ChainedIter.new(
-      WrapperArrayIter.new(
-        [(first[2]).as(Bytes)]
-      ),
-      ValueNextIterator.new(@cursor)
-   )
+    first = @cursor.find_ge key
+    if first[2] == nil
+      ChainedIter.new(WrapperArrayIter.new([] of Bytes))
+    else
+      ChainedIter.new(
+        WrapperArrayIter.new(
+          [(first[2]).as(Bytes)]
+        ),
+        ValueNextIterator.new(@cursor)
+     )
+   end
   end
 
   def get_iter_le(key : Float64 | Int64)
@@ -91,13 +109,17 @@ class BaseHandle < Handle
   end
 
   def get_iter_le(key : String | Bytes)
-    first = @cursor.find_ge(key)
-    ChainedIter.new(
-      WrapperArrayIter.new(
-        [(first[2]).as(Bytes)]
-      ),
-      PrevIterator.new(@cursor)
-   )
+    first = @cursor.find_ge key
+    if first[2] == nil
+      ChainedIter.new(WrapperArrayIter.new([] of Bytes))
+    else
+      ChainedIter.new(
+        WrapperArrayIter.new(
+          [(first[2]).as(Bytes)]
+        ),
+        PrevIterator.new(@cursor)
+     )
+   end
   end
 
 
@@ -110,10 +132,14 @@ class BaseHandle < Handle
     min = min.to_bytes
     max = max.to_bytes
     first = @cursor.find_ge(min)
-    ChainedIter.new(
-      WrapperArrayIter.new([first[2].as(Bytes)]),
-      BoundedIterator.new(@cursor,min,max)
-    )
+    if first[2] == nil
+      ChainedIter.new(WrapperArrayIter.new([] of Bytes))
+    else
+      ChainedIter.new(
+        WrapperArrayIter.new([first[2].as(Bytes)]),
+        BoundedIterator.new(@cursor,min,max)
+      )
+    end
   end
 
   def get_subset_iter(s : String)
@@ -260,15 +286,21 @@ class MultiHandle
   end
   # Store methods
 
-  def store(key : KeyType | Array(String | Int64 | Float64), val : Bytes, store_name = "store")
+  def store(key : KeyType | Array(String | Int64 | Float64), val : Bytes | String, store_name = "store")
     with_store_handle store_name, return_cur: true do |cur|
       cur.put key, val
     end
   end
 
   def fetch(key : KeyType, store_name = "store")
+    v = nil
     with_store_handle store_name, return_cur: true do |cur|
-      cur.get key
+      v = cur.get key
+    end
+    if v != nil
+      v.as(Tuple(Bool | Nil, Float32 | Float64 | Int32 | Int64 | Slice(UInt8) | String | UInt32 | UInt64 | Nil, Float32 | Float64 | Int32 | Int64 | Slice(UInt8) | String | UInt32 | UInt64 | Nil))[2]
+    else
+      v
     end
   end
 
@@ -286,11 +318,21 @@ class MultiHandle
     end
   end
 
-  # # Index Iters
-  #
-  # def get_iter(idx : String, key : KeyType)
-  #   @handles[idx].get_iter key
-  # end
+  # Index Iters
+
+  def get_iter(idx : String, key : KeyType)
+    with_handle idx do |cur|
+      cur.get_iter key
+    end
+  end
+
+  def get_iter_no_dups(idx : String)
+    i = nil
+    with_handle idx do |cur|
+      i = cur.get_iter_no_dups
+    end
+    i.as(NoDupTupleIterator)
+  end
   #
   # def get_iter_ge(idx : String, key : KeyType)
   #   @handles[idx].get_iter_ge key
